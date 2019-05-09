@@ -3,8 +3,7 @@ type Listener = () => any;
 export class Depends {
 	private subs: Map<number, Listener> = new Map();
 
-	public depend(listener: Listener) {
-		const token = new Date().getTime();
+	public depend(listener: Listener, token: number) {
 		this.subs.set(token, listener);
 	}
 

@@ -5,10 +5,11 @@ import { Depends } from './dep';
 export default class Store<State, Action> {
 	private activeListener: () => any = null;
 	private isSub: boolean = true; // 当前是订阅 还是取消订阅
-	private token: number; // 取消订阅时的token
+	private token: number = -1; // 取消订阅时的token
 	private state: State;
 	private isDispatching: boolean = false;
 	private reducer: (preState: State, action: Action) => State;
+
 	constructor(state: State, reducer: (preState: State, action: Action) => State) {
 		this.state = state;
 		this.reducer = reducer;
@@ -26,7 +27,7 @@ export default class Store<State, Action> {
 					this.defineArrayReactive(object, prop);
 					break;
 				default:
-					this.defineReactive(object[prop], prop);
+					this.defineReactive(object, prop);
 					break;
 			}
 		}
@@ -38,15 +39,22 @@ export default class Store<State, Action> {
 		const dep = new Depends();
 		let value = object[prop];
 		Object.defineProperty(object, prop, {
-			get() {
+			get: () => {
 				if (this.isSub) {
-					dep.depend(this.activeListener);
+					if (this.activeListener) {
+						dep.depend(this.activeListener, this.token);
+						this.activeListener = null;
+						this.token = -1;
+					}
 				} else {
-					dep.remove(this.token);
+					if (this.token !== -1) {
+						dep.remove(this.token);
+						this.token = -1;
+					}
 				}
 				return value;
 			},
-			set(val: any) {
+			set: (val: any) => {
 				dep.update();
 				value = val;
 			},
@@ -56,7 +64,7 @@ export default class Store<State, Action> {
 	public dispatch(action: Action) {
 		this.checkIsDiapatching();
 		this.isDispatching = true;
-		this.state = this.reducer(this.state, action);
+		this.reducer(this.state, action);
 		this.isDispatching = false;
 	}
 
@@ -65,18 +73,19 @@ export default class Store<State, Action> {
 		return this.state;
 	}
 
-	public subscribe(target: any, listener: () => any) {
+	public subscribe(obj: any, prop: string, listener: () => any) {
 		this.activeListener = listener;
 		this.isSub = true;
-		// 触发getter
-		Object.prototype.toString.call(target);
+		const token = new Date().getTime();
+		this.token = token;
+		Object.prototype.toString.call(obj[prop]);
+		return token;
 	}
 
-	public unsubscribe(target: any, token: number) {
+	public unsubscribe(obj: any, prop: string, token: number) {
 		this.token = token;
 		this.isSub = false;
-		// 触发getter;
-		Object.prototype.toString.call(target);
+		Object.prototype.toString.call(obj[prop]);
 	}
 
 	private checkIsDiapatching() {
